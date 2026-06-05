@@ -1,0 +1,640 @@
+  const searchInput = document.getElementById('searchInput');
+const categoryList = document.getElementById('categoryList');
+const productGrid = document.getElementById('productGrid');
+const cartToggle = document.getElementById('cartToggle');
+const cartPanel = document.getElementById('cartPanel');
+const cartItemsElement = document.getElementById('cartItems');
+const cartCount = document.getElementById('cartCount');
+const cartTotal = document.getElementById('cartTotal');
+const clearCartButton = document.getElementById('clearCart');
+const checkoutButton = document.getElementById('checkoutButton');
+const deliverySection = document.getElementById('deliverySection');
+const orderConfirmation = document.getElementById('orderConfirmation');
+const deliveryForm = document.getElementById('deliveryForm');
+const customerNameInput = document.getElementById('customerName');
+const customerPhoneInput = document.getElementById('customerPhone');
+const customerAddressInput = document.getElementById('customerAddress');
+const customerCityInput = document.getElementById('customerCity');
+const customerPincodeInput = document.getElementById('customerPincode');
+const customerNoteInput = document.getElementById('customerNote');
+const paymentMethodInputs = document.querySelectorAll('input[name="paymentMethod"]');
+const paymentHint = document.getElementById('paymentHint');
+const trackingSection = document.getElementById('trackingSection');
+const trackingSteps = document.getElementById('trackingSteps');
+const trackingStatus = document.getElementById('trackingStatus');
+const trackingEta = document.getElementById('trackingEta');
+const teleconsultList = document.getElementById('teleconsultList');
+const appointmentSummary = document.getElementById('appointmentSummary');
+const appointmentModal = document.getElementById('appointmentModal');
+const closeAppointment = document.getElementById('closeAppointment');
+const appointmentForm = document.getElementById('appointmentForm');
+const doctorSelect = document.getElementById('doctorSelect');
+const patientNameInput = document.getElementById('patientName');
+const patientPhoneInput = document.getElementById('patientPhone');
+const patientEmailInput = document.getElementById('patientEmail');
+const appointmentDateInput = document.getElementById('appointmentDate');
+const appointmentTimeInput = document.getElementById('appointmentTime');
+const symptomsInput = document.getElementById('symptoms');
+const appointmentMessage = document.getElementById('appointmentMessage');
+const videoCallModal = document.getElementById('videoCallModal');
+const closeVideoCall = document.getElementById('closeVideoCall');
+const localVideo = document.getElementById('localVideo');
+const videoDoctorName = document.getElementById('videoDoctorName');
+const endCallButton = document.getElementById('endCallButton');
+
+let localStream = null;
+let bookedAppointment = null;
+
+const products = [
+  { id: 1, name: 'Paracetamol Tablet', category: 'Pain Relief', dose: '500mg', price: 45, description: 'Reduce fever and relieve mild pain.' },
+  { id: 2, name: 'Vitamin C Gummies', category: 'Vitamins', dose: '500mg', price: 129, description: 'Boost immunity and support daily wellness.' },
+  { id: 3, name: 'Cough Syrup', category: 'Cold & Flu', dose: '100ml', price: 89, description: 'Soothes cough and relieves throat irritation.' },
+  { id: 4, name: 'Antacid Tablets', category: 'Digestion', dose: '200mg', price: 99, description: 'Provides fast relief from acidity and heartburn.' },
+  { id: 5, name: 'Multivitamin Capsule', category: 'Vitamins', dose: '1 capsule', price: 189, description: 'Daily nutrition support for energy and health.' },
+  { id: 6, name: 'Allergy Relief', category: 'Allergy', dose: '10mg', price: 69, description: 'Helps control seasonal and nasal allergy symptoms.' },
+  { id: 7, name: 'Baby Pain Relief', category: 'Baby Care', dose: '2.5ml', price: 179, description: 'Gentle medicine for baby fever and pain.' },
+  { id: 8, name: 'Protein Powder', category: 'Nutrition', dose: '500g', price: 799, description: 'Supports muscle recovery with essential protein.' },
+];
+
+const categories = ['All', 'Pain Relief', 'Vitamins', 'Cold & Flu', 'Digestion', 'Allergy', 'Baby Care', 'Nutrition'];
+const deliveryPartners = [
+  { name: 'Ali', vehicle: 'Bike', eta: '25 mins' },
+  { name: 'Priya', vehicle: 'Scooter', eta: '22 mins' },
+  { name: 'Rohan', vehicle: 'Car', eta: '30 mins' },
+  { name: 'Maya', vehicle: 'Van', eta: '28 mins' },
+];
+let selectedCategory = 'All';
+let cart = [];
+let orderDetails = null;
+let trackingTimer = null;
+let currentTrackingOrderId = null;
+const razorpayKey = 'rzp_test_1DP5mmOlF5G5ag';
+const deliveryStatuses = [
+  { key: 'confirmed', label: 'Order confirmed' },
+  { key: 'preparing', label: 'Preparing your package' },
+  { key: 'out_for_delivery', label: 'Out for delivery' },
+  { key: 'delivered', label: 'Delivered' },
+];
+
+function renderCategories() {
+  categoryList.innerHTML = '';
+
+  categories.forEach((category) => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = `category-chip ${category === selectedCategory ? 'active' : ''}`;
+    chip.textContent = category;
+    chip.addEventListener('click', () => {
+      selectedCategory = category;
+      renderCategories();
+      renderProducts();
+    });
+    categoryList.appendChild(chip);
+  });
+}
+
+function getFilteredProducts() {
+  const query = searchInput.value.trim().toLowerCase();
+  return products.filter((product) => {
+    const matchesCategory = selectedCategory === 'All' || product.category === selectedCategory;
+    const matchesSearch = product.name.toLowerCase().includes(query) || product.description.toLowerCase().includes(query);
+    return matchesCategory && matchesSearch;
+  });
+}
+
+function renderProducts() {
+  const displayedProducts = getFilteredProducts();
+  productGrid.innerHTML = '';
+
+  if (displayedProducts.length === 0) {
+    productGrid.innerHTML = '<div class="empty-state">No medicines found for this search or category.</div>';
+    return;
+  }
+
+  displayedProducts.forEach((product) => {
+    const card = document.createElement('article');
+    card.className = 'product-card';
+    card.innerHTML = `
+      <div>
+        <span class="badge">${product.category}</span>
+      </div>
+      <div>
+        <h4>${product.name}</h4>
+        <p>${product.description}</p>
+      </div>
+      <div class="product-meta">
+        <span>${product.dose}</span>
+        <strong class="price">₹${product.price}</strong>
+      </div>
+      <button type="button" data-id="${product.id}">Add to cart</button>
+    `;
+
+    card.querySelector('button').addEventListener('click', () => addToCart(product));
+    productGrid.appendChild(card);
+  });
+}
+
+function addToCart(product) {
+  const existing = cart.find((item) => item.id === product.id);
+  if (existing) {
+    existing.quantity += 1;
+  } else {
+    cart.push({ ...product, quantity: 1 });
+  }
+  updateCart();
+}
+
+function removeFromCart(productId) {
+  cart = cart.filter((item) => item.id !== productId);
+  updateCart();
+}
+
+function clearCart(keepConfirmation = false) {
+  cart = [];
+  if (!keepConfirmation) {
+    orderConfirmation.classList.add('hidden');
+    trackingSection.classList.add('hidden');
+    stopTracking();
+  }
+  updateCart();
+}
+
+function updateCart() {
+  cartItemsElement.innerHTML = '';
+
+  if (cart.length === 0) {
+    cartItemsElement.innerHTML = '<div class="empty-state">Your cart is empty. Add medicines to place your order.</div>';
+    deliverySection.classList.add('hidden');
+  } else {
+    orderConfirmation.classList.add('hidden');
+    cart.forEach((item) => {
+      const row = document.createElement('div');
+      row.className = 'cart-item';
+      row.innerHTML = `
+        <div class="cart-item-header">
+          <div>
+            <strong>${item.name}</strong>
+            <div><small>${item.quantity} × ₹${item.price}</small></div>
+          </div>
+          <strong>₹${item.price * item.quantity}</strong>
+        </div>
+        <button type="button" data-id="${item.id}">Remove</button>
+      `;
+      row.querySelector('button').addEventListener('click', () => removeFromCart(item.id));
+      cartItemsElement.appendChild(row);
+    });
+  }
+
+  const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  cartTotal.textContent = `₹${total}`;
+  cartCount.textContent = cart.reduce((sum, item) => sum + item.quantity, 0);
+  checkoutButton.disabled = cart.length === 0;
+}
+
+function fetchDoctors() {
+  fetch('/api/doctors')
+    .then((response) => response.json())
+    .then((doctors) => {
+      renderDoctorCards(doctors);
+      populateDoctorSelect(doctors);
+    })
+    .catch(() => {
+      teleconsultList.innerHTML = '<div class="empty-state">Unable to load doctor list.</div>';
+    });
+}
+
+function renderDoctorCards(doctors) {
+  teleconsultList.innerHTML = doctors
+    .map(
+      (doctor) => `
+        <article class="doctor-card">
+          <div>
+            <h4>${doctor.name}</h4>
+            <p>${doctor.specialty}</p>
+          </div>
+          <div class="doctor-meta">
+            <span class="doctor-chip">${doctor.experience} yrs</span>
+            <span class="doctor-chip">${doctor.fee} per consult</span>
+          </div>
+          <button type="button" class="appointment-button" data-id="${doctor.id}">Book Appointment</button>
+        </article>
+      `
+    )
+    .join('');
+
+  teleconsultList.querySelectorAll('.appointment-button').forEach((button) => {
+    button.addEventListener('click', () => openAppointmentModal(button.dataset.id));
+  });
+}
+
+function populateDoctorSelect(doctors) {
+  doctorSelect.innerHTML = doctors
+    .map((doctor) => `<option value="${doctor.id}">${doctor.name} — ${doctor.specialty}</option>`)
+    .join('');
+}
+
+function openAppointmentModal(doctorId) {
+  doctorSelect.value = doctorId;
+  appointmentMessage.textContent = '';
+  appointmentModal.classList.remove('hidden');
+}
+
+function closeAppointmentModal() {
+  appointmentModal.classList.add('hidden');
+  appointmentForm.reset();
+}
+
+function showAppointmentSummary(appointment) {
+  bookedAppointment = appointment;
+  appointmentSummary.innerHTML = `
+    <h4>Appointment booked</h4>
+    <p><strong>Doctor:</strong> ${appointment.doctor.name}</p>
+    <p><strong>Date:</strong> ${appointment.date} at ${appointment.time}</p>
+    <p><strong>Patient:</strong> ${appointment.patient.name}</p>
+    <p><strong>Status:</strong> ${appointment.status}</p>
+    <button type="button" class="call-button" id="startVideoCall">Start Video Call</button>
+  `;
+  appointmentSummary.classList.remove('hidden');
+  document.getElementById('startVideoCall').addEventListener('click', () => showVideoCallModal(appointment.doctor));
+}
+
+function startLocalVideo() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert('Your browser does not support video calls.');
+    return;
+  }
+
+  navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+    .then((stream) => {
+      localStream = stream;
+      localVideo.srcObject = stream;
+      localVideo.play();
+    })
+    .catch(() => {
+      alert('Unable to access your camera or microphone.');
+    });
+}
+
+function stopLocalVideo() {
+  if (localStream) {
+    localStream.getTracks().forEach((track) => track.stop());
+    localStream = null;
+  }
+  localVideo.srcObject = null;
+}
+
+function showVideoCallModal(doctor) {
+  if (!doctor) return;
+  videoDoctorName.textContent = `Consulting Dr. ${doctor.name}`;
+  videoCallModal.classList.remove('hidden');
+  startLocalVideo();
+}
+
+function closeVideoCallModal() {
+  videoCallModal.classList.add('hidden');
+  stopLocalVideo();
+}
+
+function bookAppointment(event) {
+  event.preventDefault();
+
+  const doctorId = doctorSelect.value;
+  const patientName = patientNameInput.value.trim();
+  const patientPhone = patientPhoneInput.value.trim();
+  const patientEmail = patientEmailInput.value.trim();
+  const date = appointmentDateInput.value;
+  const time = appointmentTimeInput.value;
+  const symptoms = symptomsInput.value.trim();
+
+  if (!patientName || !patientPhone || !date || !time || !symptoms) {
+    appointmentMessage.textContent = 'Please complete all required fields.';
+    return;
+  }
+
+  const payload = {
+    doctorId,
+    patient: {
+      name: patientName,
+      phone: patientPhone,
+      email: patientEmail || null,
+    },
+    date,
+    time,
+    symptoms,
+  };
+
+  fetch('/api/appointments', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+    .then((response) => {
+      if (!response.ok) {
+        return response.json().then((body) => {
+          throw new Error(body.error || 'Unable to book appointment');
+        });
+      }
+      return response.json();
+    })
+    .then((data) => {
+      appointmentMessage.textContent = 'Appointment booked successfully!';
+      closeAppointmentModal();
+      showAppointmentSummary(data.appointment);
+    })
+    .catch((error) => {
+      appointmentMessage.textContent = error.message;
+    });
+}
+
+function stopTracking() {
+  if (trackingTimer) {
+    clearInterval(trackingTimer);
+    trackingTimer = null;
+  }
+}
+
+function showDeliveryForm() {
+  orderConfirmation.classList.add('hidden');
+  deliverySection.classList.remove('hidden');
+  deliverySection.scrollIntoView({ behavior: 'smooth' });
+}
+
+function validateDeliveryForm() {
+  if (!customerNameInput.value.trim() || !customerPhoneInput.value.trim() || !customerAddressInput.value.trim() || !customerCityInput.value.trim() || !customerPincodeInput.value.trim()) {
+    alert('Please fill all required delivery fields.');
+    return false;
+  }
+
+  if (!/^[0-9]{6}$/.test(customerPincodeInput.value.trim())) {
+    alert('Enter a valid 6-digit pincode.');
+    return false;
+  }
+
+  return true;
+}
+
+let selectedPaymentMethod = 'card';
+
+function collectOrderDetails() {
+  return {
+    name: customerNameInput.value.trim(),
+    phone: customerPhoneInput.value.trim(),
+    address: customerAddressInput.value.trim(),
+    city: customerCityInput.value.trim(),
+    pincode: customerPincodeInput.value.trim(),
+    note: customerNoteInput.value.trim(),
+    paymentMethod: selectedPaymentMethod,
+  };
+}
+
+function updatePaymentHint() {
+  const methodHints = {
+    card: 'Pay securely with cards. Supported cards are Visa, MasterCard, and RuPay.',
+    upi: 'Pay quickly using your UPI app. Enter your UPI ID in the Razorpay window if prompted.',
+    wallet: 'Pay with your preferred wallet. Popular wallets are supported through the gateway.',
+    cod: 'Pay with cash to the delivery partner when your medicines arrive.',
+  };
+  paymentHint.textContent = methodHints[selectedPaymentMethod] || 'Choose your preferred payment method.';
+}
+
+function handleCODOrder() {
+  const amount = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const paymentId = `COD-${Date.now()}`;
+  const payload = {
+    paymentId,
+    paymentMethod: 'cod',
+    cart,
+    orderDetails,
+    amount,
+  };
+
+  submitOrderToBackend(payload)
+    .then((response) => {
+      const partner = response.partner || assignDeliveryPartner();
+      const orderId = response.orderId || `AV-${Date.now()}`;
+      showOrderConfirmation(paymentId, partner, orderId, amount, 'Cash on Delivery');
+    })
+    .catch(() => {
+      const partner = assignDeliveryPartner();
+      showOrderConfirmation(paymentId, partner, `AV-${Date.now()}`, amount, 'Cash on Delivery');
+    });
+}
+
+function startPayment() {
+  const amount = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+  if (selectedPaymentMethod === 'cod') {
+    handleCODOrder();
+    return;
+  }
+
+  if (!window.Razorpay) {
+    alert('Payment gateway is unavailable. Please check your internet connection.');
+    return;
+  }
+
+  const options = {
+    key: razorpayKey,
+    amount: amount * 100,
+    currency: 'INR',
+    name: "Ashraf's Vision",
+    description: 'Medicine order payment',
+    prefill: {
+      name: orderDetails.name,
+      contact: orderDetails.phone,
+    },
+    notes: {
+      address: orderDetails.address,
+      city: orderDetails.city,
+      pincode: orderDetails.pincode,
+      note: orderDetails.note,
+      paymentMethod: selectedPaymentMethod,
+    },
+    theme: {
+      color: '#059669',
+    },
+    handler(response) {
+      handlePaymentSuccess(response);
+    },
+    modal: {
+      ondismiss() {
+        alert('Payment cancelled. You can try again from the cart.');
+      },
+    },
+  };
+
+  const razorpay = new Razorpay(options);
+  razorpay.open();
+}
+
+function submitOrderToBackend(payload) {
+  return fetch('/api/orders', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  }).then((response) => {
+    if (!response.ok) {
+      throw new Error('Order backend failed');
+    }
+    return response.json();
+  });
+}
+
+function updateTrackingUI(order) {
+  if (!order) return;
+
+  trackingSteps.innerHTML = deliveryStatuses
+    .map((stage, index) => {
+      const completed = order.statusIndex >= index;
+      return `
+        <div class="tracking-step ${completed ? 'completed' : ''}">
+          <span>${index + 1}</span>
+          <div>
+            <div>${stage.label}</div>
+            ${completed ? '<small>Completed</small>' : ''}
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+
+  trackingStatus.textContent = deliveryStatuses.find((stage) => stage.key === order.status)?.label || 'Updating...';
+  trackingEta.textContent = order.eta || '--';
+  trackingSection.classList.remove('hidden');
+}
+
+function fetchOrderStatus(orderId) {
+  return fetch(`/api/orders/${orderId}`).then((response) => {
+    if (!response.ok) {
+      throw new Error('Unable to fetch order status');
+    }
+    return response.json();
+  });
+}
+
+function stopTracking() {
+  if (trackingTimer) {
+    clearInterval(trackingTimer);
+    trackingTimer = null;
+  }
+}
+
+function startTracking(orderId) {
+  stopTracking();
+  currentTrackingOrderId = orderId;
+  fetchOrderStatus(orderId)
+    .then((order) => {
+      updateTrackingUI(order);
+      if (order.status !== 'delivered') {
+        trackingTimer = setInterval(() => {
+          fetchOrderStatus(orderId)
+            .then((updatedOrder) => {
+              updateTrackingUI(updatedOrder);
+              if (updatedOrder.status === 'delivered') {
+                stopTracking();
+              }
+            })
+            .catch(() => {
+              trackingStatus.textContent = 'Tracking unavailable';
+            });
+        }, 5000);
+      }
+    })
+    .catch(() => {
+      trackingStatus.textContent = 'Tracking unavailable';
+      trackingSection.classList.remove('hidden');
+    });
+}
+
+function assignDeliveryPartner() {
+  return deliveryPartners[Math.floor(Math.random() * deliveryPartners.length)];
+}
+
+function showOrderConfirmation(paymentId, partner, orderId, amount, paymentMethodLabel = 'Online Payment') {
+  orderConfirmation.innerHTML = `
+    <h4>Order Confirmed</h4>
+    <div class="partner-card">
+      <div><strong>Order ID:</strong> ${orderId}</div>
+      <div><strong>Payment ID:</strong> ${paymentId}</div>
+      <div><strong>Payment Method:</strong> ${paymentMethodLabel}</div>
+      <div><strong>Total:</strong> ₹${amount}</div>
+    </div>
+    <div class="partner-card">
+      <h5>Delivery Partner Assigned</h5>
+      <p><strong>${partner.name}</strong> (${partner.vehicle})</p>
+      <p>ETA: ${partner.eta}</p>
+    </div>
+    <p>Delivering to: <strong>${orderDetails.address}, ${orderDetails.city} (${orderDetails.pincode})</strong></p>
+    <p>Delivery note: ${orderDetails.note || 'None'}</p>
+  `;
+  orderConfirmation.classList.remove('hidden');
+  deliverySection.classList.add('hidden');
+  trackingSection.classList.remove('hidden');
+  clearCart(true);
+  startTracking(orderId);
+}
+
+function handlePaymentSuccess(payment) {
+  const amount = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const payload = {
+    paymentId: payment.razorpay_payment_id,
+    paymentMethod: selectedPaymentMethod,
+    cart,
+    orderDetails,
+    amount,
+  };
+
+  submitOrderToBackend(payload)
+    .then((response) => {
+      const partner = response.partner || assignDeliveryPartner();
+      const orderId = response.orderId || `AV-${Date.now()}`;
+      const methodLabel = selectedPaymentMethod === 'upi' ? 'UPI' : selectedPaymentMethod === 'wallet' ? 'Wallet' : 'Card';
+      showOrderConfirmation(payment.razorpay_payment_id, partner, orderId, amount, methodLabel);
+    })
+    .catch(() => {
+      const partner = assignDeliveryPartner();
+      const methodLabel = selectedPaymentMethod === 'upi' ? 'UPI' : selectedPaymentMethod === 'wallet' ? 'Wallet' : 'Card';
+      showOrderConfirmation(payment.razorpay_payment_id, partner, `AV-${Date.now()}`, amount, methodLabel);
+    });
+}
+
+function checkoutCart() {
+  if (cart.length === 0) return;
+  showDeliveryForm();
+}
+
+searchInput.addEventListener('input', renderProducts);
+cartToggle.addEventListener('click', toggleCart);
+clearCartButton.addEventListener('click', clearCart);
+checkoutButton.addEventListener('click', checkoutCart);
+deliveryForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  if (!validateDeliveryForm()) return;
+  orderDetails = collectOrderDetails();
+  startPayment();
+});
+paymentMethodInputs.forEach((input) => {
+  input.addEventListener('change', (event) => {
+    selectedPaymentMethod = event.target.value;
+    updatePaymentHint();
+  });
+});
+updatePaymentHint();
+closeAppointment.addEventListener('click', closeAppointmentModal);
+appointmentForm.addEventListener('submit', bookAppointment);
+closeVideoCall.addEventListener('click', closeVideoCallModal);
+endCallButton.addEventListener('click', closeVideoCallModal);
+videoCallModal.addEventListener('click', (event) => {
+  if (event.target === videoCallModal) {
+    closeVideoCallModal();
+  }
+});
+
+renderCategories();
+renderProducts();
+updateCart();
+fetchDoctors();
